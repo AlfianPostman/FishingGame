@@ -1,0 +1,12 @@
+[
+    {
+        "speakerName": "Guard",
+        "text": "Halt! Who goes there?",
+        "choices": ["I'm a traveler.", "None of your business!"]
+    },
+    {
+        "speakerName": "Guard",
+        "text": "Move along, traveler.",
+        "choices": []
+    }
+]
