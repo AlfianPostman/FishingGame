@@ -12,6 +12,8 @@ public class SubStateFishing : SuperStateAction
     {
         base.Enter(); 
         enterTime = Time.time;
+
+        Debug.Log("ASDASD");
     }
 
     public override void Update()
@@ -25,15 +27,15 @@ public class SubStateFishing : SuperStateAction
             PLAYERSTATEMACHINE.Change(PLAYER.STATES.IDLESTATE);
         }
 
-        if (PLAYER.INPUTPROCESSOR.INPUTVECTOR.magnitude > 0)
-        {
-            PLAYERSTATEMACHINE.Change(PLAYER.STATES.MOVESTATE);
-        }
+        //if (PLAYER.INPUTPROCESSOR.INPUTVECTOR.magnitude > 0)
+        //{
+        //    PLAYERSTATEMACHINE.Change(PLAYER.STATES.MOVESTATE);
+        //}
 
-        if (PLAYER.COLLISION.GROUND && PLAYER.INPUTPROCESSOR.INPUTJUMP > Time.time)
-        {
-            PLAYERSTATEMACHINE.Change(PLAYER.STATES.JUMPSTATE);
-        }
+        //if (PLAYER.COLLISION.GROUND && PLAYER.INPUTPROCESSOR.INPUTJUMP > Time.time)
+        //{
+        //    PLAYERSTATEMACHINE.Change(PLAYER.STATES.JUMPSTATE);
+        //}
 
         // do if statement if fish got caught, and start minigame
     }

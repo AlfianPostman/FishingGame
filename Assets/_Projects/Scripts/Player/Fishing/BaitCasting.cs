@@ -7,10 +7,11 @@ public class BaitCasting : MonoBehaviour
     [SerializeField] Transform startPoint;    
     [SerializeField] Transform targetPoint;    
     [SerializeField] AnimationCurve arcCurve;    
-    [SerializeField] float castDuration = 1.5f;   
+    [SerializeField] float castDuration = 1.5f;
     
     float castTimer = 0f;
     bool isCasting = false;
+    [HideInInspector] public bool successfullyLanded = false;
     [HideInInspector] public bool hasLanded = false;
 
     public void StartCasting(float power)
@@ -32,6 +33,7 @@ public class BaitCasting : MonoBehaviour
         castTimer = 0f;
         isCasting = false;
         hasLanded = false;
+        successfullyLanded = false;
     }
 
     void OnBaitLanded()
@@ -41,13 +43,18 @@ public class BaitCasting : MonoBehaviour
         {
             if (hit.collider.CompareTag("Water"))
             {
-                LandOnWater(hit.point.y);
+                hasLanded = true;
+                successfullyLanded = true;
+
+                LandOnObjet(true, hit.point.y);
             }
 
             if (!hit.collider.CompareTag("Water"))
             {
-                Debug.Log("Not hitting water");
-                ResetBait();
+                hasLanded = true;
+                successfullyLanded = false;
+
+                LandOnObjet(false, hit.point.y);
             }
         }
     }
@@ -71,21 +78,24 @@ public class BaitCasting : MonoBehaviour
         }
     }
 
-    void LandOnWater(float waterHeight)
+    void LandOnObjet(bool onWater, float waterHeight)
     {
-        if (!hasLanded)
+        isCasting = false;
+
+        // Snap the bait to the water surface
+        Vector3 landedPosition = transform.position;
+        landedPosition.y = waterHeight + 0.1f; // Add slight offset to prevent sinking
+        transform.position = landedPosition;
+
+        if (onWater)
         {
-            hasLanded = true;
-            isCasting = false;
-
-            // Snap the bait to the water surface
-            Vector3 landedPosition = transform.position;
-            landedPosition.y = waterHeight + 0.1f; // Add slight offset to prevent sinking
-            transform.position = landedPosition;
-
             anim.Play("casted_idle");
-
-            Debug.Log("Bait landed on water via Raycast!");
+            Debug.Log("Bait landed on water!");
+        }
+        else
+        {
+            anim.Play("default");
+            Debug.Log("Bait landed on not water!");
         }
     }
 }
