@@ -10,11 +10,22 @@ public class GrassInstancer : MonoBehaviour
     public Terrain terrain;
 
     [Header("Density Settings")]
+    [Range(0.1f, 10f)]
     public float density = 2f;
+    [Tooltip("Scales the number of grass instances")]
+    [Range(0.1f, 5f)]
+    public float densityMultiplier = 1f;
     public float heightOffset = 0.1f;
+    [Tooltip("When true, updates grass when density changes")]
+    public bool dynamicDensityUpdate = true;
 
-    [Header("LOD Settings")]
+    [Header("LOD and Culling Settings")]
     public float maxRenderDistance = 100f;
+    [Tooltip("Extra distance beyond camera frustum to keep chunks loaded")]
+    [Range(0f, 50f)]
+    public float frustumCullingPadding = 10f;
+    [Tooltip("Draw frustum culling boundaries for debugging")]
+    public bool showFrustumDebug = true;
 
     [Header("Chunking")]
     public int chunkSize = 32;
@@ -27,6 +38,15 @@ public class GrassInstancer : MonoBehaviour
     private Vector2Int lastCameraChunk = new Vector2Int(-999, -999);
     private int chunksPerTerrainAxis;
     private MaterialPropertyBlock propertyBlock;
+    private float lastDensityMultiplier;
+
+    // Frustum culling
+    private Plane[] cameraFrustumPlanes = new Plane[6];
+    private Vector3 lastCameraPosition;
+    private Quaternion lastCameraRotation;
+    private float frustumCheckTimer = 0f;
+    private const float FRUSTUM_UPDATE_INTERVAL = 0.1f; // Update frustum every 0.1 seconds
+    private HashSet<Vector2Int> visibleChunks = new HashSet<Vector2Int>();
 
     // Debug options
     public bool debugMode = true;
@@ -38,6 +58,8 @@ public class GrassInstancer : MonoBehaviour
         public Vector3 centerPosition;
         public Bounds bounds;
         public int instanceCount;
+        public float densityWhenCreated;
+        public bool isVisible = true;
 
         public void Release()
         {
@@ -63,6 +85,11 @@ public class GrassInstancer : MonoBehaviour
 
         // Calculate how many chunks we need
         chunksPerTerrainAxis = Mathf.CeilToInt(terrainData.size.x / chunkSize);
+        lastDensityMultiplier = densityMultiplier;
+
+        // Initialize camera data
+        lastCameraPosition = mainCamera.transform.position;
+        lastCameraRotation = mainCamera.transform.rotation;
 
         Debug.Log($"Terrain size: {terrainData.size}, Position: {terrainPosition}");
         Debug.Log($"Total chunks needed: {chunksPerTerrainAxis} x {chunksPerTerrainAxis}");
@@ -71,6 +98,9 @@ public class GrassInstancer : MonoBehaviour
     void Start()
     {
         propertyBlock = new MaterialPropertyBlock();
+
+        // Initial frustum calculation
+        CalculateFrustumPlanes();
     }
 
     void Update()
@@ -78,34 +108,66 @@ public class GrassInstancer : MonoBehaviour
         Vector3 cameraPos = mainCamera.transform.position;
         Vector2Int currentCameraChunk = WorldPosToChunkCoord(cameraPos);
 
-        if (debugMode)
+        // Update frustum planes only when needed
+        frustumCheckTimer += Time.deltaTime;
+        bool cameraMovedSignificantly = Vector3.Distance(lastCameraPosition, cameraPos) > 1f ||
+                                       Quaternion.Angle(lastCameraRotation, mainCamera.transform.rotation) > 5f;
+
+        if (frustumCheckTimer >= FRUSTUM_UPDATE_INTERVAL || cameraMovedSignificantly)
         {
-            Debug.Log($"Camera at chunk: {currentCameraChunk}, World pos: {cameraPos}");
+            CalculateFrustumPlanes();
+            UpdateVisibleChunks();
+
+            lastCameraPosition = cameraPos;
+            lastCameraRotation = mainCamera.transform.rotation;
+            frustumCheckTimer = 0f;
         }
 
-        // Only rebuild chunks if the camera moved to a different chunk
-        if (currentCameraChunk != lastCameraChunk)
+        // Check if density has changed and we need to rebuild
+        bool densityChanged = dynamicDensityUpdate && !Mathf.Approximately(lastDensityMultiplier, densityMultiplier);
+
+        if (debugMode && densityChanged)
         {
-            if (debugMode)
+            Debug.Log($"Density changed from {lastDensityMultiplier} to {densityMultiplier}, rebuilding chunks");
+        }
+
+        // Rebuild chunks if camera moved to a different chunk or density changed
+        if (currentCameraChunk != lastCameraChunk || densityChanged)
+        {
+            if (debugMode && currentCameraChunk != lastCameraChunk)
             {
                 Debug.Log($"Camera moved from chunk {lastCameraChunk} to {currentCameraChunk}");
             }
 
-            // Release chunks that are too far away
-            List<Vector2Int> chunksToRemove = new List<Vector2Int>();
-            foreach (var kvp in chunks)
+            // Release all chunks if density changed
+            if (densityChanged)
             {
-                if (Vector2Int.Distance(kvp.Key, currentCameraChunk) > maxRenderDistance / chunkSize)
+                foreach (var chunk in chunks.Values)
                 {
-                    kvp.Value.Release();
-                    chunksToRemove.Add(kvp.Key);
+                    chunk.Release();
                 }
+                chunks.Clear();
+                lastDensityMultiplier = densityMultiplier;
             }
-
-            foreach (var key in chunksToRemove)
+            // Otherwise, just release distant chunks
+            else
             {
-                chunks.Remove(key);
-                if (debugMode) Debug.Log($"Removed chunk {key}");
+                // Release chunks that are too far away
+                List<Vector2Int> chunksToRemove = new List<Vector2Int>();
+                foreach (var kvp in chunks)
+                {
+                    if (Vector2Int.Distance(kvp.Key, currentCameraChunk) > maxRenderDistance / chunkSize)
+                    {
+                        kvp.Value.Release();
+                        chunksToRemove.Add(kvp.Key);
+                    }
+                }
+
+                foreach (var key in chunksToRemove)
+                {
+                    chunks.Remove(key);
+                    if (debugMode) Debug.Log($"Removed chunk {key}");
+                }
             }
 
             // Create new chunks within render distance
@@ -140,12 +202,19 @@ public class GrassInstancer : MonoBehaviour
             }
 
             lastCameraChunk = currentCameraChunk;
+
+            // Update visibility after creating/removing chunks
+            UpdateVisibleChunks();
         }
 
-        // Draw all chunks
-        foreach (var chunk in chunks.Values)
+        // Draw all visible chunks
+        foreach (var kvp in chunks)
         {
-            if (chunk.positionBuffer != null && chunk.argsBuffer != null)
+            Vector2Int coord = kvp.Key;
+            GrassChunk chunk = kvp.Value;
+
+            // Only draw chunks that are in the visible set
+            if (chunk.positionBuffer != null && chunk.argsBuffer != null && visibleChunks.Contains(coord))
             {
                 // Set up property block for this specific chunk
                 propertyBlock.Clear();
@@ -156,6 +225,46 @@ public class GrassInstancer : MonoBehaviour
                     grassMesh, 0, grassMaterial,
                     chunk.bounds, chunk.argsBuffer, 0, propertyBlock);
             }
+        }
+    }
+
+    private void CalculateFrustumPlanes()
+    {
+        // Calculate camera frustum planes
+        GeometryUtility.CalculateFrustumPlanes(mainCamera, cameraFrustumPlanes);
+    }
+
+    private void UpdateVisibleChunks()
+    {
+        // Clear previous visible chunks
+        visibleChunks.Clear();
+
+        foreach (var kvp in chunks)
+        {
+            Vector2Int coord = kvp.Key;
+            GrassChunk chunk = kvp.Value;
+
+            if (chunk.positionBuffer == null) continue;
+
+            // Create a slightly expanded bounds for smoother transitions
+            Bounds expandedBounds = new Bounds(chunk.bounds.center, chunk.bounds.size);
+            expandedBounds.Expand(frustumCullingPadding);
+
+            // Check if expanded bounds intersect with camera frustum
+            if (GeometryUtility.TestPlanesAABB(cameraFrustumPlanes, expandedBounds))
+            {
+                visibleChunks.Add(coord);
+                chunk.isVisible = true;
+            }
+            else
+            {
+                chunk.isVisible = false;
+            }
+        }
+
+        if (debugMode)
+        {
+            Debug.Log($"Visible chunks: {visibleChunks.Count} of {chunks.Count} total");
         }
     }
 
@@ -212,9 +321,12 @@ public class GrassInstancer : MonoBehaviour
             chunkSize * 1.2f
         );
 
-        // Determine grass instances (adjustable based on distance)
-        float densityMultiplier = Mathf.Lerp(1.0f, 0.2f,
-            distanceFromCamera / (maxRenderDistance / chunkSize));
+        // Determine grass instances based on distance and densityMultiplier
+        //float distanceFactor = Mathf.Lerp(1.0f, 0.2f,
+        //    distanceFromCamera / (maxRenderDistance / chunkSize));
+
+        //// Apply the density multiplier to control overall grass density
+        //float effectiveDensity = distanceFactor * densityMultiplier;
 
         int instancesPerAxis = Mathf.CeilToInt(chunkSize * densityMultiplier);
         int totalInstances = instancesPerAxis * instancesPerAxis;
@@ -245,6 +357,7 @@ public class GrassInstancer : MonoBehaviour
         chunk.centerPosition = centerPos;
         chunk.bounds = new Bounds(centerPos, boundsSize);
         chunk.instanceCount = totalInstances;
+        chunk.densityWhenCreated = densityMultiplier;
 
         // Create position buffer
         chunk.positionBuffer = new ComputeBuffer(totalInstances, sizeof(float) * 4);
@@ -257,13 +370,38 @@ public class GrassInstancer : MonoBehaviour
 
         // Store chunk
         chunks[chunkCoord] = chunk;
+
+        // Check initial visibility
+        Bounds expandedBounds = new Bounds(chunk.bounds.center, chunk.bounds.size);
+        expandedBounds.Expand(frustumCullingPadding);
+        if (GeometryUtility.TestPlanesAABB(cameraFrustumPlanes, expandedBounds))
+        {
+            visibleChunks.Add(chunkCoord);
+            chunk.isVisible = true;
+        }
+    }
+
+    // Method to force regenerate all chunks
+    public void RegenerateAllChunks()
+    {
+        foreach (var chunk in chunks.Values)
+        {
+            chunk.Release();
+        }
+        chunks.Clear();
+        visibleChunks.Clear();
+
+        lastCameraChunk = new Vector2Int(-999, -999);
+        lastDensityMultiplier = densityMultiplier;
+
+        Update();
     }
 
     void OnDrawGizmos()
     {
-        if (!Application.isPlaying) return;
+        if (!Application.isPlaying || !showFrustumDebug) return;
 
-        // Draw chunk bounds
+        // Draw all chunk bounds
         foreach (var kvp in chunks)
         {
             Vector2Int coord = kvp.Key;
@@ -271,22 +409,69 @@ public class GrassInstancer : MonoBehaviour
 
             if (chunk.positionBuffer != null)
             {
-                Gizmos.color = Color.green;
+                // Visible chunks are green, invisible chunks are red
+                Gizmos.color = visibleChunks.Contains(coord) ? Color.green : new Color(1, 0, 0, 0.3f);
                 Gizmos.DrawWireCube(chunk.bounds.center, chunk.bounds.size);
 
 #if UNITY_EDITOR
-                UnityEditor.Handles.Label(chunk.bounds.center,
-                    $"Chunk {coord}: {chunk.instanceCount}");
+                if (visibleChunks.Contains(coord))
+                {
+                    UnityEditor.Handles.Label(chunk.bounds.center,
+                        $"Chunk {coord}: {chunk.instanceCount}");
+                }
 #endif
             }
         }
 
         // Draw camera frustum
-        if (mainCamera != null)
+        if (mainCamera != null && showFrustumDebug)
         {
             Gizmos.color = Color.blue;
             Gizmos.DrawRay(mainCamera.transform.position, mainCamera.transform.forward * 10);
+
+            // Draw camera frustum planes
+            DrawFrustum(mainCamera, Color.cyan);
         }
+    }
+
+    private void DrawFrustum(Camera camera, Color color)
+    {
+#if UNITY_EDITOR
+        if (camera == null) return;
+
+        // Get camera frustum corners at the far clip plane
+        Vector3[] nearCorners = new Vector3[4];
+        Vector3[] farCorners = new Vector3[4];
+
+        camera.CalculateFrustumCorners(new Rect(0, 0, 1, 1), camera.nearClipPlane, Camera.MonoOrStereoscopicEye.Mono, nearCorners);
+        camera.CalculateFrustumCorners(new Rect(0, 0, 1, 1), camera.farClipPlane, Camera.MonoOrStereoscopicEye.Mono, farCorners);
+
+        // Convert corners to world space
+        for (int i = 0; i < 4; i++)
+        {
+            nearCorners[i] = camera.transform.TransformPoint(nearCorners[i]);
+            farCorners[i] = camera.transform.TransformPoint(farCorners[i]);
+        }
+
+        // Draw near plane
+        Gizmos.color = color;
+        for (int i = 0; i < 4; i++)
+        {
+            Gizmos.DrawLine(nearCorners[i], nearCorners[(i + 1) % 4]);
+        }
+
+        // Draw far plane
+        for (int i = 0; i < 4; i++)
+        {
+            Gizmos.DrawLine(farCorners[i], farCorners[(i + 1) % 4]);
+        }
+
+        // Draw connecting lines
+        for (int i = 0; i < 4; i++)
+        {
+            Gizmos.DrawLine(nearCorners[i], farCorners[i]);
+        }
+#endif
     }
 
     void OnDestroy()
@@ -297,5 +482,6 @@ public class GrassInstancer : MonoBehaviour
         }
 
         chunks.Clear();
+        visibleChunks.Clear();
     }
 }

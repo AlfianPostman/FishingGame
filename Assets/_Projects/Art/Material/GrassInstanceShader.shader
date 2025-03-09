@@ -6,8 +6,8 @@ Shader "Custom/OptimizedGrassInstanceShader"
         _Color ("Color", Color) = (1,1,1,1)
         _WindSpeed ("Wind Speed", Range(0, 10)) = 1
         _WindStrength ("Wind Strength", Range(0, 1)) = 0.1
-        _LODDistance1 ("LOD Distance 1", Float) = 20
-        _LODDistance2 ("LOD Distance 2", Float) = 50
+        _LODDistance1 ("LOD Distance 1", Float) = 50
+        _LODDistance2 ("LOD Distance 2", Float) = 1000
     }
     SubShader
     {

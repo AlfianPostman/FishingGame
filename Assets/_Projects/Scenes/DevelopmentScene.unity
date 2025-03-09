@@ -2532,7 +2532,7 @@ Terrain:
   m_DetailObjectDistance: 80
   m_DetailObjectDensity: 1
   m_HeightmapPixelError: 5
-  m_SplatMapDistance: 1000
+  m_SplatMapDistance: 76
   m_HeightmapMinimumLODSimplification: 0
   m_HeightmapMaximumLOD: 0
   m_ShadowCastingMode: 2
@@ -2842,7 +2842,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1348025423}
-  m_Enabled: 0
+  m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -3667,9 +3667,15 @@ MonoBehaviour:
   grassMesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
   grassMaterial: {fileID: 2100000, guid: 5d567bed92e630242bdc821be8d342e8, type: 2}
   terrain: {fileID: 1313584049}
-  density: 0.3
-  heightOffset: 1
-  chunkSize: 500
+  density: 1
+  densityMultiplier: 1
+  heightOffset: 0.5
+  dynamicDensityUpdate: 0
+  maxRenderDistance: 200
+  frustumCullingPadding: 17.7
+  showFrustumDebug: 1
+  chunkSize: 32
+  debugMode: 1
 --- !u!1 &2042502775
 GameObject:
   m_ObjectHideFlags: 0
@@ -3997,7 +4003,7 @@ Camera:
   m_ShutterSpeed: 0.005
   m_Aperture: 16
   m_FocusDistance: 10
-  m_FocalLength: 50
+  m_FocalLength: 20.78461
   m_BladeCount: 5
   m_Curvature: {x: 2, y: 11}
   m_BarrelClipping: 0.25
@@ -4010,11 +4016,11 @@ Camera:
     y: 0
     width: 1
     height: 1
-  near clip plane: 0.3
+  near clip plane: -30
   far clip plane: 1000
-  field of view: 60
-  orthographic: 0
-  orthographic size: 5
+  field of view: 60.000004
+  orthographic: 1
+  orthographic size: 21
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -4066,7 +4072,7 @@ Transform:
   m_GameObject: {fileID: 6815189486699370869}
   serializedVersion: 2
   m_LocalRotation: {x: 0.38268343, y: 0, z: 0, w: 0.92387956}
-  m_LocalPosition: {x: 490.99994, y: 18.17867, z: 417.32227}
+  m_LocalPosition: {x: 953.0001, y: 23.344688, z: 1108.3455}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:

@@ -77,6 +77,8 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0.5
     - _GlossyReflections: 1
+    - _LODDistance1: 20
+    - _LODDistance2: 50
     - _Metallic: 0
     - _Mode: 3
     - _NoiseScale: 0.1
@@ -86,6 +88,8 @@ Material:
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _UVSec: 0
+    - _WindSpeed: 1
+    - _WindStrength: 0.1
     - _ZWrite: 0
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
